@@ -4,6 +4,8 @@ version = "0.1.0"
 edition = "2024"
 license = "MPL-2.0"
 authors = ["Matt Keeter <matt.j.keeter@gmail.com"]
+description = "Directory tracker for easy jumping"
+
 
 [dependencies]
 anyhow          = { version = "1.0.101" }
