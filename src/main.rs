@@ -1,4 +1,4 @@
-use anyhow::{Context, anyhow};
+use anyhow::{Context, anyhow, bail};
 use clap::{Parser, Subcommand, ValueEnum};
 use std::io::Write;
 
@@ -29,6 +29,11 @@ enum Command {
         #[clap(subcommand)]
         cmd: DbCommand,
     },
+    /// Install shell integrations
+    Install {
+        #[clap(value_enum)]
+        shell: Shell,
+    },
 }
 
 #[derive(Subcommand)]
@@ -39,6 +44,11 @@ enum DbCommand {
     ///
     /// Timestamps are used to resolve conflicting rows
     Import,
+}
+
+#[derive(ValueEnum, Copy, Clone)]
+enum Shell {
+    Fish,
 }
 
 fn read_yn(prompt: &str) -> std::io::Result<bool> {
@@ -103,14 +113,14 @@ fn inner(args: &Args) -> anyhow::Result<()> {
         .as_secs()
         .try_into()
         .unwrap();
+    let base_dirs = directories::BaseDirs::new()
+        .ok_or_else(|| anyhow!("could not get base dirs"))?;
     match &args.cmd {
         Command::Add { path } => {
             // Convert to an absolute path
             let path = path
                 .canonicalize_utf8()
                 .with_context(|| format!("could not find '{path}'"))?;
-            let base_dirs = directories::BaseDirs::new()
-                .ok_or_else(|| anyhow!("could not get base dirs"))?;
 
             // Ignore home and root directories
             if path == base_dirs.home_dir() || path.components().count() == 1 {
@@ -192,7 +202,7 @@ fn inner(args: &Args) -> anyhow::Result<()> {
             let path: String = conn.query_one(
                 "
                 SELECT path FROM zipzap WHERE path like ?
-                ORDER BY 10000 * rank * (3.75/((0.0001 * (time - ?) + 1) + 0.25))
+                ORDER BY -10000 * rank * (3.75/((0.0001 * (time - ?) + 1) + 0.25))
                 LIMIT 1
                 ",
                 rusqlite::params![pat, now],
@@ -200,6 +210,57 @@ fn inner(args: &Args) -> anyhow::Result<()> {
             )?;
             println!("{path}");
         }
+        Command::Install { shell } => match shell {
+            Shell::Fish => {
+                let home = base_dirs.home_dir();
+                copy_check(
+                    home.join(".config").join(fish::conf::PATH),
+                    fish::conf::SCRIPT,
+                )?;
+                copy_check(
+                    home.join(".config").join(fish::func::PATH),
+                    fish::func::SCRIPT,
+                )?;
+            }
+        },
     }
     Ok(())
+}
+
+/// Writes `text` to `path`
+fn copy_check(path: std::path::PathBuf, text: &str) -> anyhow::Result<()> {
+    let path = camino::Utf8PathBuf::from_path_buf(path).unwrap();
+    let prev = match std::fs::read_to_string(&path) {
+        Ok(s) => Some(s),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+        Err(e) => return Err(e.into()),
+    };
+
+    if let Some(prev) = prev {
+        if prev == text {
+            println!("file at '{path}' exists and matches");
+        } else if read_yn(&format!("overwrite existing file at '{path}'?"))? {
+            std::fs::write(path, text)?;
+        } else {
+            bail!("file at '{path}' exists and we won't overwrite it")
+        }
+    } else {
+        println!("writing integration script to '{path}'");
+        std::fs::write(path, text)?;
+    }
+    Ok(())
+}
+
+mod fish {
+    macro_rules! include_path_str {
+        ($mod_name:ident, $path:literal) => {
+            pub mod $mod_name {
+                pub const PATH: &str = $path;
+                pub const SCRIPT: &str = include_str!(concat!("../", $path));
+            }
+        };
+    }
+
+    include_path_str!(conf, "fish/conf.d/z.fish");
+    include_path_str!(func, "fish/functions/z.fish");
 }
