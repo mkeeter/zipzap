@@ -1,7 +1,7 @@
 use anyhow::{Context, anyhow};
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
+use std::io::Write;
 
-/// Directory tracker for easy jumping
 #[derive(Parser)]
 #[clap(author, version, about, long_about = None)]
 struct Args {
@@ -24,15 +24,35 @@ enum Command {
         #[clap(allow_hyphen_values = true)]
         pattern: Vec<String>,
     },
+    /// Database manipulation
+    Db {
+        #[clap(subcommand)]
+        cmd: DbCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum DbCommand {
+    /// Print the path of the database file
+    Path,
     /// Imports a '.z' file from the user's home directory
     ///
-    /// If the `clear` flag is not set, then timestamps are used to resolve
-    /// conflicting rows
-    Import {
-        /// Clear the database before importing
-        #[clap(long)]
-        clear: bool,
-    },
+    /// Timestamps are used to resolve conflicting rows
+    Import,
+}
+
+fn read_yn(prompt: &str) -> std::io::Result<bool> {
+    loop {
+        print!("{prompt} [y/n]: ");
+        std::io::stdout().flush()?;
+        let mut input = String::new();
+        std::io::stdin().read_line(&mut input)?;
+        match input.trim().to_lowercase().as_str() {
+            "y" | "yes" => break Ok(true),
+            "n" | "no" => break Ok(false),
+            _ => println!("Invalid input, please enter 'y' or 'n'."),
+        }
+    }
 }
 
 fn main() -> anyhow::Result<()> {
@@ -116,7 +136,9 @@ fn inner(args: &Args) -> anyhow::Result<()> {
                 conn.execute("UPDATE zipzap SET rank = rank * 0.99;", [])?;
             }
         }
-        Command::Import { clear } => {
+        Command::Db {
+            cmd: DbCommand::Import,
+        } => {
             let user_dirs = directories::UserDirs::new()
                 .ok_or_else(|| anyhow!("could not get user dirs"))?;
             let z_path = user_dirs.home_dir().join(".z");
@@ -124,9 +146,6 @@ fn inner(args: &Args) -> anyhow::Result<()> {
                 .with_context(|| format!("could not read '{z_path:?}'"))?;
             let tx = conn.transaction()?;
             {
-                if *clear {
-                    tx.execute("DELETE FROM zipzap;", [])?;
-                }
                 let mut stmt = tx.prepare(
                     "
                     INSERT INTO zipzap (path, rank, time) VALUES (?, ?, ?)
@@ -154,6 +173,12 @@ fn inner(args: &Args) -> anyhow::Result<()> {
                 }
             }
             tx.commit()?;
+        }
+        Command::Db {
+            cmd: DbCommand::Path,
+        } => {
+            let db_path = camino::Utf8PathBuf::try_from(db_file)?;
+            println!("{db_path}");
         }
         Command::Find { pattern } => {
             // Build a wildcard pattern
