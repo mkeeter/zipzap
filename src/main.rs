@@ -34,6 +34,11 @@ enum Command {
         #[clap(value_enum)]
         shell: Option<Shell>,
     },
+    /// Prints shell-specific functions to be used with 'source'
+    Source {
+        #[clap(value_enum)]
+        shell: Shell,
+    },
 }
 
 #[derive(Subcommand)]
@@ -49,6 +54,7 @@ enum DbCommand {
 #[derive(ValueEnum, Copy, Clone)]
 enum Shell {
     Fish,
+    Bash,
 }
 
 fn read_yn(prompt: &str) -> std::io::Result<bool> {
@@ -205,7 +211,7 @@ fn inner(args: &Args) -> anyhow::Result<()> {
             let path: String = conn.query_one(
                 "
                 SELECT path FROM zipzap WHERE path like ?
-                ORDER BY -rank * (3.75/((0.0001 * (time - ?) + 1) + 0.25))
+                ORDER BY -rank * (3.75/((0.0001 * (? - time) + 1) + 0.25))
                 LIMIT 1
                 ",
                 rusqlite::params![pat, now],
@@ -237,6 +243,7 @@ fn inner(args: &Args) -> anyhow::Result<()> {
                         anyhow!("parent process name is not utf-8 (?!)")
                     })? {
                         "fish" => Shell::Fish,
+                        "bash" => Shell::Bash,
                         s => bail!(
                             "unknown shell '{s}'; please specify with argument"
                         ),
@@ -245,6 +252,7 @@ fn inner(args: &Args) -> anyhow::Result<()> {
                         "auto-detected '{}' shell",
                         match shell {
                             Shell::Fish => "fish",
+                            Shell::Bash => "bash",
                         }
                     );
                     shell
@@ -255,26 +263,65 @@ fn inner(args: &Args) -> anyhow::Result<()> {
                     );
                 }
             };
-            match shell {
+            let home = base_dirs.home_dir();
+            let changed = match shell {
                 Shell::Fish => {
-                    let home = base_dirs.home_dir();
-                    copy_check(
+                    let mut changed = false;
+                    changed |= copy_check(
                         home.join(".config").join(fish::conf::PATH),
                         fish::conf::SCRIPT,
                     )?;
-                    copy_check(
+                    changed |= copy_check(
                         home.join(".config").join(fish::func::PATH),
                         fish::func::SCRIPT,
                     )?;
+                    changed
                 }
+                Shell::Bash => {
+                    let bashrc = home.join(".bashrc");
+                    let mut text = match std::fs::read_to_string(&bashrc) {
+                        Ok(t) => t,
+                        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                            "".to_owned()
+                        }
+                        Err(e) => return Err(e.into()),
+                    };
+                    const ZIPZAP_EVAL: &str = "eval \"$(zipzap source bash)\" # added by 'zipzap install bash'";
+                    if text.lines().rev().any(|line| line == ZIPZAP_EVAL) {
+                        println!("shell integration is already installed");
+                        false
+                    } else if read_yn("append shell integration to .bashrc?")? {
+                        if !text.ends_with('\n') {
+                            text += "\n";
+                        }
+                        text += ZIPZAP_EVAL;
+                        text += "\n";
+
+                        // Atomically move the bashrc into place
+                        let mut tmp = tempfile::NamedTempFile::new()?;
+                        tmp.write_all(text.as_bytes())?;
+                        tmp.flush()?;
+                        std::fs::rename(tmp.path(), bashrc)?;
+                        true
+                    } else {
+                        bail!("exiting without editing .bashrc");
+                    }
+                }
+            };
+            if changed {
+                println!("done; please restart your shell");
             }
         }
+        Command::Source { shell } => match shell {
+            Shell::Bash => println!("{}", include_str!("../bash/z.sh")),
+            Shell::Fish => println!(),
+        },
     }
     Ok(())
 }
 
 /// Writes `text` to `path`
-fn copy_check(path: std::path::PathBuf, text: &str) -> anyhow::Result<()> {
+fn copy_check(path: std::path::PathBuf, text: &str) -> anyhow::Result<bool> {
     let path = camino::Utf8PathBuf::from_path_buf(path).unwrap();
     let prev = match std::fs::read_to_string(&path) {
         Ok(s) => Some(s),
@@ -285,16 +332,18 @@ fn copy_check(path: std::path::PathBuf, text: &str) -> anyhow::Result<()> {
     if let Some(prev) = prev {
         if prev == text {
             println!("'{path}' exists and matches");
+            Ok(false)
         } else if read_yn(&format!("overwrite existing file at '{path}'?"))? {
             std::fs::write(path, text)?;
+            Ok(true)
         } else {
             bail!("file at '{path}' exists and we won't overwrite it")
         }
     } else {
         println!("writing integration script to '{path}'");
         std::fs::write(path, text)?;
+        Ok(true)
     }
-    Ok(())
 }
 
 mod fish {
