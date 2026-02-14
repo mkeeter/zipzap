@@ -55,6 +55,7 @@ enum DbCommand {
 enum Shell {
     Fish,
     Bash,
+    Zsh,
 }
 
 fn read_yn(prompt: &str) -> std::io::Result<bool> {
@@ -244,6 +245,7 @@ fn inner(args: &Args) -> anyhow::Result<()> {
                     })? {
                         "fish" => Shell::Fish,
                         "bash" => Shell::Bash,
+                        "zsh" => Shell::Zsh,
                         s => bail!(
                             "unknown shell '{s}'; please specify with argument"
                         ),
@@ -253,6 +255,7 @@ fn inner(args: &Args) -> anyhow::Result<()> {
                         match shell {
                             Shell::Fish => "fish",
                             Shell::Bash => "bash",
+                            Shell::Zsh => "zsh",
                         }
                     );
                     shell
@@ -277,36 +280,8 @@ fn inner(args: &Args) -> anyhow::Result<()> {
                     )?;
                     changed
                 }
-                Shell::Bash => {
-                    let bashrc = home.join(".bashrc");
-                    let mut text = match std::fs::read_to_string(&bashrc) {
-                        Ok(t) => t,
-                        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                            "".to_owned()
-                        }
-                        Err(e) => return Err(e.into()),
-                    };
-                    const ZIPZAP_EVAL: &str = "eval \"$(zipzap source bash)\" # added by 'zipzap install bash'";
-                    if text.lines().rev().any(|line| line == ZIPZAP_EVAL) {
-                        println!("shell integration is already installed");
-                        false
-                    } else if read_yn("append shell integration to .bashrc?")? {
-                        if !text.ends_with('\n') {
-                            text += "\n";
-                        }
-                        text += ZIPZAP_EVAL;
-                        text += "\n";
-
-                        // Atomically move the bashrc into place
-                        let mut tmp = tempfile::NamedTempFile::new()?;
-                        tmp.write_all(text.as_bytes())?;
-                        tmp.flush()?;
-                        std::fs::rename(tmp.path(), bashrc)?;
-                        true
-                    } else {
-                        bail!("exiting without editing .bashrc");
-                    }
-                }
+                Shell::Bash => edit_rc(home, "bash")?,
+                Shell::Zsh => edit_rc(home, "zsh")?,
             };
             if changed {
                 println!("done; please restart your shell");
@@ -314,10 +289,43 @@ fn inner(args: &Args) -> anyhow::Result<()> {
         }
         Command::Source { shell } => match shell {
             Shell::Bash => println!("{}", include_str!("../bash/z.sh")),
+            Shell::Zsh => println!("{}", include_str!("../zsh/z.zsh")),
             Shell::Fish => println!(),
         },
     }
     Ok(())
+}
+
+fn edit_rc(home: &std::path::Path, shell: &str) -> anyhow::Result<bool> {
+    let file = format!(".{shell}rc");
+    let rc = home.join(&file);
+    let mut text = match std::fs::read_to_string(&rc) {
+        Ok(t) => t,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => "".to_owned(),
+        Err(e) => return Err(e.into()),
+    };
+    let zipzap_eval = format!(
+        "eval \"$(zipzap source {shell})\" # added by 'zipzap install {shell}'"
+    );
+    if text.lines().rev().any(|line| line == zipzap_eval) {
+        println!("shell integration is already installed");
+        Ok(false)
+    } else if read_yn(&format!("append shell integration to {file}?"))? {
+        if !text.ends_with('\n') {
+            text += "\n";
+        }
+        text += &zipzap_eval;
+        text += "\n";
+
+        // Atomically move the file into place
+        let mut tmp = tempfile::NamedTempFile::new()?;
+        tmp.write_all(text.as_bytes())?;
+        tmp.flush()?;
+        std::fs::rename(tmp.path(), rc)?;
+        Ok(true)
+    } else {
+        bail!("exiting without editing {file}");
+    }
 }
 
 /// Writes `text` to `path`
