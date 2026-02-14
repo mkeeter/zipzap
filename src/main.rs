@@ -205,7 +205,7 @@ fn inner(args: &Args) -> anyhow::Result<()> {
             let path: String = conn.query_one(
                 "
                 SELECT path FROM zipzap WHERE path like ?
-                ORDER BY -10000 * rank * (3.75/((0.0001 * (time - ?) + 1) + 0.25))
+                ORDER BY -rank * (3.75/((0.0001 * (time - ?) + 1) + 0.25))
                 LIMIT 1
                 ",
                 rusqlite::params![pat, now],
