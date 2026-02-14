@@ -1,10 +1,14 @@
 # Script to be sourced into a bash shell
-grep "zipzap" <<< "$PROMPT_COMMAND" >/dev/null || {
-    PROMPT_COMMAND="$PROMPT_COMMAND"$'\n''(zipzap --quiet add "$(command pwd 2>/dev/null)"&);'
+_zipzap_precmd() {
+    local cwd="$(command pwd 2>/dev/null)"
+    [[ "$cwd" != "$_ZIPZAP_LAST_DIR" ]] && (zipzap --quiet add "$cwd" &)
+    _ZIPZAP_LAST_DIR="$cwd"
+}
+grep "_zipzap_precmd" <<< "$PROMPT_COMMAND" >/dev/null || {
+    PROMPT_COMMAND="$PROMPT_COMMAND"$'\n''_zipzap_precmd'
 }
 z() {
-    local target
-    target=$(zipzap --quiet find "$@")
+    local target=$(zipzap --quiet find "$@")
     local Z_STATUS=$?
     if [[ $Z_STATUS -eq 0 && -n "$target" ]]; then
         builtin cd "$target"
