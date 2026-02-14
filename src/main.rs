@@ -191,6 +191,9 @@ fn inner(args: &Args) -> anyhow::Result<()> {
             println!("{db_path}");
         }
         Command::Find { pattern } => {
+            if pattern.is_empty() {
+                return Ok(());
+            }
             // Build a wildcard pattern
             let mut pat = "%".to_string();
             for p in pattern {
