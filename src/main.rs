@@ -58,20 +58,6 @@ enum Shell {
     Zsh,
 }
 
-fn read_yn(prompt: &str) -> std::io::Result<bool> {
-    loop {
-        print!("{prompt} [y/n]: ");
-        std::io::stdout().flush()?;
-        let mut input = String::new();
-        std::io::stdin().read_line(&mut input)?;
-        match input.trim().to_lowercase().as_str() {
-            "y" | "yes" => break Ok(true),
-            "n" | "no" => break Ok(false),
-            _ => println!("Invalid input, please enter 'y' or 'n'."),
-        }
-    }
-}
-
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     let r = inner(&args);
@@ -140,7 +126,7 @@ fn inner(args: &Args) -> anyhow::Result<()> {
                 DO UPDATE SET rank = rank + 1, time = :now;
                 ",
                 rusqlite::named_params! {
-                    ":path": path.as_str(),
+                    ":path": path.as_str().to_lowercase(),
                     ":now": now,
                 },
             )?;
@@ -162,6 +148,7 @@ fn inner(args: &Args) -> anyhow::Result<()> {
             let z_text = std::fs::read_to_string(&z_path)
                 .with_context(|| format!("could not read '{z_path:?}'"))?;
             let tx = conn.transaction()?;
+            let mut n = 0;
             {
                 let mut stmt = tx.prepare(
                     "
@@ -177,7 +164,8 @@ fn inner(args: &Args) -> anyhow::Result<()> {
                     let mut iter = line.split('|');
                     let path = iter
                         .next()
-                        .ok_or_else(|| anyhow!("missing path in '{line}'"))?;
+                        .ok_or_else(|| anyhow!("missing path in '{line}'"))?
+                        .to_lowercase();
                     let rank: f64 = iter
                         .next()
                         .ok_or_else(|| anyhow!("missing rank in '{line}'"))?
@@ -187,9 +175,11 @@ fn inner(args: &Args) -> anyhow::Result<()> {
                         .ok_or_else(|| anyhow!("missing time in '{line}'"))?
                         .parse()?;
                     stmt.execute(rusqlite::params![path, rank, time])?;
+                    n += 1;
                 }
             }
             tx.commit()?;
+            println!("imported {n} rows");
         }
         Command::Db {
             cmd: DbCommand::Path,
@@ -205,7 +195,7 @@ fn inner(args: &Args) -> anyhow::Result<()> {
             let mut pat = "%".to_string();
             for p in pattern {
                 pat += "%";
-                pat += p;
+                pat += &p.to_lowercase();
             }
             pat += "%";
             // Find the best match by "frecency"
@@ -271,12 +261,12 @@ fn inner(args: &Args) -> anyhow::Result<()> {
                 Shell::Fish => {
                     let mut changed = false;
                     changed |= copy_check(
-                        home.join(".config").join(fish::conf::PATH),
-                        fish::conf::SCRIPT,
+                        home.join(".config/fish/conf.d/z.fish"),
+                        include_str!("../fish/conf.d/z.fish"),
                     )?;
                     changed |= copy_check(
-                        home.join(".config").join(fish::func::PATH),
-                        fish::func::SCRIPT,
+                        home.join(".config/fish/functions/z.fish"),
+                        include_str!("../fish/functions/z.fish"),
                     )?;
                     changed
                 }
@@ -290,12 +280,28 @@ fn inner(args: &Args) -> anyhow::Result<()> {
         Command::Source { shell } => match shell {
             Shell::Bash => println!("{}", include_str!("../bash/z.sh")),
             Shell::Zsh => println!("{}", include_str!("../zsh/z.zsh")),
-            Shell::Fish => println!(),
+            Shell::Fish => println!("# fish does not need a sourced script"),
         },
     }
     Ok(())
 }
 
+/// Sends a question to the user, expecting a `[y,n]` reply
+fn read_yn(prompt: &str) -> std::io::Result<bool> {
+    loop {
+        print!("{prompt} [y/n]: ");
+        std::io::stdout().flush()?;
+        let mut input = String::new();
+        std::io::stdin().read_line(&mut input)?;
+        match input.trim().to_lowercase().as_str() {
+            "y" | "yes" => break Ok(true),
+            "n" | "no" => break Ok(false),
+            _ => println!("invalid input, please enter 'y' or 'n'."),
+        }
+    }
+}
+
+/// Appends an `eval` line to an `rc` file, returning `true` if things changed
 fn edit_rc(home: &std::path::Path, shell: &str) -> anyhow::Result<bool> {
     let file = format!(".{shell}rc");
     let rc = home.join(&file);
@@ -307,6 +313,7 @@ fn edit_rc(home: &std::path::Path, shell: &str) -> anyhow::Result<bool> {
     let zipzap_eval = format!(
         "eval \"$(zipzap source {shell})\" # added by 'zipzap install {shell}'"
     );
+    // Search in reverse-order to bail out quickly
     if text.lines().rev().any(|line| line == zipzap_eval) {
         println!("shell integration is already installed");
         Ok(false)
@@ -328,7 +335,7 @@ fn edit_rc(home: &std::path::Path, shell: &str) -> anyhow::Result<bool> {
     }
 }
 
-/// Writes `text` to `path`
+/// Writes `text` to `path`, returning `true` if things changed
 fn copy_check(path: std::path::PathBuf, text: &str) -> anyhow::Result<bool> {
     let path = camino::Utf8PathBuf::from_path_buf(path).unwrap();
     let prev = match std::fs::read_to_string(&path) {
@@ -352,18 +359,4 @@ fn copy_check(path: std::path::PathBuf, text: &str) -> anyhow::Result<bool> {
         std::fs::write(path, text)?;
         Ok(true)
     }
-}
-
-mod fish {
-    macro_rules! include_path_str {
-        ($mod_name:ident, $path:literal) => {
-            pub mod $mod_name {
-                pub const PATH: &str = $path;
-                pub const SCRIPT: &str = include_str!(concat!("../", $path));
-            }
-        };
-    }
-
-    include_path_str!(conf, "fish/conf.d/z.fish");
-    include_path_str!(func, "fish/functions/z.fish");
 }
