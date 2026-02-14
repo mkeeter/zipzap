@@ -301,7 +301,7 @@ fn edit_rc(home: &std::path::Path, shell: &str) -> anyhow::Result<bool> {
     let rc = home.join(&file);
     let mut text = match std::fs::read_to_string(&rc) {
         Ok(t) => t,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => "".to_owned(),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => "\n".to_owned(),
         Err(e) => return Err(e.into()),
     };
     let zipzap_eval = format!(
