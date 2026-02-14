@@ -10,7 +10,8 @@ description = "Directory tracker for easy jumping"
 [dependencies]
 anyhow          = { version = "1.0.101" }
 camino          = { version = "1.2.2"   }
-clap            = { version = "4.5.58", features = ["derive"]  }
+clap            = { version = "4.5.58", features = ["derive"] }
 directories     = { version = "6.0.0"   }
 locked-tripwire = { version = "0.1.1"   }
 rusqlite        = { version = "0.38.0", features = ["bundled"] }
+sysinfo         = { version = "0.38.1", default-features = false, features = ["system"] }

@@ -32,7 +32,7 @@ enum Command {
     /// Install shell integrations
     Install {
         #[clap(value_enum)]
-        shell: Shell,
+        shell: Option<Shell>,
     },
 }
 
@@ -213,19 +213,62 @@ fn inner(args: &Args) -> anyhow::Result<()> {
             )?;
             println!("{path}");
         }
-        Command::Install { shell } => match shell {
-            Shell::Fish => {
-                let home = base_dirs.home_dir();
-                copy_check(
-                    home.join(".config").join(fish::conf::PATH),
-                    fish::conf::SCRIPT,
-                )?;
-                copy_check(
-                    home.join(".config").join(fish::func::PATH),
-                    fish::func::SCRIPT,
-                )?;
+        Command::Install { shell } => {
+            let shell = match shell {
+                Some(s) => *s,
+                None if sysinfo::IS_SUPPORTED_SYSTEM => {
+                    let mut system = sysinfo::System::new_all();
+                    system.refresh_processes(
+                        sysinfo::ProcessesToUpdate::All,
+                        true,
+                    );
+                    let my_pid = sysinfo::get_current_pid()
+                        .expect("unable to get PID of the current process");
+                    let parent_pid = system
+                        .process(my_pid)
+                        .expect("no self process?")
+                        .parent()
+                        .expect("unable to get parent process");
+                    let parent_process = system
+                        .process(parent_pid)
+                        .expect("unable to get parent process");
+                    let parent_name = parent_process.name();
+                    let shell = match parent_name.to_str().ok_or_else(|| {
+                        anyhow!("parent process name is not utf-8 (?!)")
+                    })? {
+                        "fish" => Shell::Fish,
+                        s => bail!(
+                            "unknown shell '{s}'; please specify with argument"
+                        ),
+                    };
+                    println!(
+                        "auto-detected '{}' shell",
+                        match shell {
+                            Shell::Fish => "fish",
+                        }
+                    );
+                    shell
+                }
+                None => {
+                    bail!(
+                        "cannot auto-detect shell; please specify with argument"
+                    );
+                }
+            };
+            match shell {
+                Shell::Fish => {
+                    let home = base_dirs.home_dir();
+                    copy_check(
+                        home.join(".config").join(fish::conf::PATH),
+                        fish::conf::SCRIPT,
+                    )?;
+                    copy_check(
+                        home.join(".config").join(fish::func::PATH),
+                        fish::func::SCRIPT,
+                    )?;
+                }
             }
-        },
+        }
     }
     Ok(())
 }
@@ -241,7 +284,7 @@ fn copy_check(path: std::path::PathBuf, text: &str) -> anyhow::Result<()> {
 
     if let Some(prev) = prev {
         if prev == text {
-            println!("file at '{path}' exists and matches");
+            println!("'{path}' exists and matches");
         } else if read_yn(&format!("overwrite existing file at '{path}'?"))? {
             std::fs::write(path, text)?;
         } else {
