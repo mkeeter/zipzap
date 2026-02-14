@@ -34,7 +34,7 @@ enum Command {
         #[clap(value_enum)]
         shell: Option<Shell>,
     },
-    /// Prints shell-specific functions to be used with 'source'
+    /// Prints code to be loaded into a shell's environment
     Source {
         #[clap(value_enum)]
         shell: Shell,
