@@ -1,3 +1,4 @@
+#![doc = include_str!("../README.md")]
 use anyhow::{Context, anyhow, bail};
 use clap::{Parser, Subcommand, ValueEnum};
 use std::io::Write;
