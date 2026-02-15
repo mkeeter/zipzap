@@ -1,6 +1,12 @@
-![zipzap logo](https://github.com/mkeeter/zipzap/blob/main/logo.png)
+![zipzap logo](https://raw.githubusercontent.com/mkeeter/zipzap/refs/heads/main/logo.png)
+
+[![Crates.io](https://img.shields.io/crates/d/zipzap)](https://crates.io/crates/zipzap)
+[![License](https://img.shields.io/crates/l/zipzap)](LICENSE.txt)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/mkeeter/zipzap/ci.yaml?branch=main)](https://github.com/mkeeter/zipzap/actions/workflows/ci.yaml?query=branch%3Amain)
 
 `zipzap` is a tool for tracking and jumping into frequently-used directories.
+It records which working directories you spend your time in, then provides a
+shell function to jump to them quickly.
 
 It's a cousin of the well-regarded [`z` tool](https://github.com/rupa/z),
 making a slightly different set of choices:
@@ -11,10 +17,20 @@ making a slightly different set of choices:
 - Only supports `frecency` metric for selecting directories
 - always case-insensitive
 - Easy shell integration: just `zipzap install`
-- Modern CLI design (using `clap` for argument parsing)
+- Modern CLI design
+  (using [`clap`](https://github.com/clap-rs/clap) for argument parsing)
 
 It uses the same metrics / scoring as `z`, and can import existing data from
 `~/.z` into its own database.
+
+# Quick start
+```shell
+cargo install --locked zipzap   # installs the binary
+zipzap install                  # installs shell integrations
+zipzap db import                # imports an existing `z` database
+# restart your shell to load shell integrations, then use `z` to jump around
+```
+Keep reading for details on each of these steps!
 
 # Installation
 ## `zipzap` command
@@ -30,8 +46,8 @@ Shell integration is needed to track directory changes and to jump around with
 ```
 zipzap install
 ```
-This automatically detects the parent shell and installs hooks for `fish`,
-`bash`, or `zsh`.  You'll need to restart your shell afterwards.
+This detects the parent shell and installs hooks for `fish`, `bash`, or `zsh`.
+You'll need to restart your shell afterwards.
 
 ## Importing an existing `z` database
 ```
@@ -70,5 +86,5 @@ written by `zipzap install` and automatically loaded by the shell.
 For `bash` and `zsh`, it's a little more complicated.  `zipzap source
 [bash,zsh]` prints a script which loads the hook and `z` function into the
 shell; this script can be executed with `eval` to configure the current shell.
-`zipzap install` appends a line to the startup script (e.g. `~/.bashrc`) which
-simply calls `eval $(zipzap source bash)`.
+`zipzap install` appends an `eval` line to the shell's startup script, e.g.
+adding `eval $(zipzap source bash)` to your `~/.bashrc`.
