@@ -50,7 +50,7 @@ The exact form of the directory hook depends on the shell:
 - For `fish`, we add a hook function which watches `PWD` and calls `zipzap add`
   when it changes
 - For `bash`, we add the hook to `PROMPT_COMMAND`, so it's run on every prompt –
-  but keep track of the last known working directory, ony calling `zipzap add`
+  but keep track of the last known working directory, only calling `zipzap add`
   when it _changes_
 - `zsh` is similar to bash, but stores the hook in `precmd_functions` instead
 
