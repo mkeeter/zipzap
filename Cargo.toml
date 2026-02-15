@@ -14,7 +14,7 @@ directories     = { version = "6.0.0"   }
 locked-tripwire = { version = "0.1.1"   }
 rusqlite        = { version = "0.38.0", features = ["bundled"] }
 sysinfo         = { version = "0.38.1", default-features = false, features = ["system"] }
-tempfile = "3.25.0"
+tempfile        = { version = "3.25.0" }
 
 [profile.release]
 lto = true
