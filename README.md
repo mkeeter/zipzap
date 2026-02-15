@@ -1,3 +1,5 @@
+![zipzap logo](https://github.com/mkeeter/zipzap/blob/main/logo.png)
+
 `zipzap` is a tool for tracking and jumping into frequently-used directories.
 
 It's a cousin of the well-regarded [`z` tool](https://github.com/rupa/z),
