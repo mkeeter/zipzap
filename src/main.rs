@@ -192,7 +192,7 @@ fn inner(args: &Args) -> anyhow::Result<()> {
                 return Ok(());
             }
             // Build a wildcard pattern
-            let mut pat = "%".to_string();
+            let mut pat = String::new();
             for p in pattern {
                 pat += "%";
                 pat += &p.to_lowercase();
@@ -325,7 +325,7 @@ fn edit_rc(home: &std::path::Path, shell: &str) -> anyhow::Result<bool> {
         text += "\n";
 
         // Atomically move the file into place
-        let mut tmp = tempfile::NamedTempFile::new()?;
+        let mut tmp = tempfile::NamedTempFile::new_in(home)?;
         tmp.write_all(text.as_bytes())?;
         tmp.flush()?;
         std::fs::rename(tmp.path(), rc)?;
@@ -337,7 +337,8 @@ fn edit_rc(home: &std::path::Path, shell: &str) -> anyhow::Result<bool> {
 
 /// Writes `text` to `path`, returning `true` if things changed
 fn copy_check(path: std::path::PathBuf, text: &str) -> anyhow::Result<bool> {
-    let path = camino::Utf8PathBuf::from_path_buf(path).unwrap();
+    // Make sure the config path exists
+    std::fs::create_dir_all(path.parent().expect("must have parent dir"))?;
     let prev = match std::fs::read_to_string(&path) {
         Ok(s) => Some(s),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
@@ -346,16 +347,16 @@ fn copy_check(path: std::path::PathBuf, text: &str) -> anyhow::Result<bool> {
 
     if let Some(prev) = prev {
         if prev == text {
-            println!("'{path}' exists and matches");
+            println!("'{path:?}' exists and matches");
             Ok(false)
-        } else if read_yn(&format!("overwrite existing file at '{path}'?"))? {
+        } else if read_yn(&format!("overwrite existing file at '{path:?}'?"))? {
             std::fs::write(path, text)?;
             Ok(true)
         } else {
-            bail!("file at '{path}' exists and we won't overwrite it")
+            bail!("file at '{path:?}' exists and we won't overwrite it")
         }
     } else {
-        println!("writing integration script to '{path}'");
+        println!("writing integration script to '{path:?}'");
         std::fs::write(path, text)?;
         Ok(true)
     }

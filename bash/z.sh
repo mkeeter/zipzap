@@ -5,7 +5,11 @@ _zipzap_precmd() {
     _ZIPZAP_LAST_DIR="$cwd"
 }
 grep "_zipzap_precmd" <<< "$PROMPT_COMMAND" >/dev/null || {
-    PROMPT_COMMAND="$PROMPT_COMMAND"$'\n''_zipzap_precmd'
+    if [[ -z "${PROMPT_COMMAND//[[:space:]]/}" ]]; then
+        PROMPT_COMMAND='_zipzap_precmd'
+    else
+        PROMPT_COMMAND="${PROMPT_COMMAND}"$'\n''_zipzap_precmd'
+    fi
 }
 z() {
     local target=$(zipzap --quiet find "$@")
