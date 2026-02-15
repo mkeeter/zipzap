@@ -1,6 +1,6 @@
 ![zipzap logo](https://raw.githubusercontent.com/mkeeter/zipzap/refs/heads/main/logo.png)
 
-[![Crates.io](https://img.shields.io/crates/d/zipzap)](https://crates.io/crates/zipzap)
+[![Crates.io](https://img.shields.io/crates/v/zipzap)](https://crates.io/crates/zipzap)
 [![License](https://img.shields.io/crates/l/zipzap)](LICENSE.txt)
 [![Build Status](https://img.shields.io/github/actions/workflow/status/mkeeter/zipzap/ci.yaml?branch=main)](https://github.com/mkeeter/zipzap/actions/workflows/ci.yaml?query=branch%3Amain)
 
