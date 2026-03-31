@@ -1,5 +1,6 @@
 # 0.1.1 (unpublished)
 - Fix incorrect argument order in `fish/conf.d/z.fish`
+- Don't double-quote paths in `zipzap install` messages
 
 # 0.1.0
 Initial release

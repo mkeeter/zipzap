@@ -350,14 +350,20 @@ fn copy_check(path: std::path::PathBuf, text: &str) -> anyhow::Result<bool> {
         if prev == text {
             println!("'{path:?}' exists and matches");
             Ok(false)
-        } else if read_yn(&format!("overwrite existing file at '{path:?}'?"))? {
+        } else if read_yn(&format!(
+            "overwrite existing file at '{}'?",
+            path.display()
+        ))? {
             std::fs::write(path, text)?;
             Ok(true)
         } else {
-            bail!("file at '{path:?}' exists and we won't overwrite it")
+            bail!(
+                "file at '{}' exists and we won't overwrite it",
+                path.display()
+            )
         }
     } else {
-        println!("writing integration script to '{path:?}'");
+        println!("writing integration script to '{}'", path.display());
         std::fs::write(path, text)?;
         Ok(true)
     }
